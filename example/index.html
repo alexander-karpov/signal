@@ -10,13 +10,13 @@
     </style>
     <form>
         <textarea id="incoming"></textarea>
-        <button type="submit">submit</button>
+        <div id="trip"></div>
     </form>
     <pre id="outgoing"></pre>
     <script src="simplepeer.min.js"></script>
     <script>
         const config = {
-            channelConfig: { ordered: false },
+            channelConfig: { ordered: false, maxRetransmits: 0 },
             config: {
                 iceServers: [
                     {
@@ -42,33 +42,126 @@
             trickle: false
         };
 
-        let p;
 
-        p = new SimplePeer({
-            initiator: location.hash === '#1',
-            ...config
-        })
+        class RealtimeX {
+            constructor() {
+                this.peer = null;
+                this.ws = null;
+                this.connectResolve = null;
+                this.connectReject = null;
+                this.receiveHandler = null;
+            }
 
-        p.on('error', err => console.log('error', err))
+            connect() {
+                this.ws = new WebSocket('wss://yoide.su:3001');
 
-        p.on('signal', data => {
-            console.log('SIGNAL', JSON.stringify(data))
-            document.querySelector('#outgoing').textContent = JSON.stringify(data)
-        })
+                this.ws.onmessage = (event) => {
+                    const action = JSON.parse(event.data.toString('utf8'));
 
-        document.querySelector('form').addEventListener('submit', ev => {
-            ev.preventDefault()
-            p.signal(JSON.parse(document.querySelector('#incoming').value))
-        })
+                    console.log('ws.onmessage:', action)
 
-        p.on('connect', () => {
-            console.log('CONNECT')
-            p.send('whatever' + Math.random())
-        })
+                    switch (action.type) {
+                        case 'start':
+                            this.createPeer(true);
+                            break;
+                        case 'signal':
+                            if (!this.peer) {
+                                this.createPeer(false);
+                            }
 
-        p.on('data', data => {
-            console.log('data: ' + data)
-        })
+                            this.peer.signal(action.signal);
+                            break;
+                        default:
+                            this.connectReject(new Error(`Enexpected action type ${action.type}`));
+
+                    }
+                };
+
+                return new Promise((resolve, reject) => {
+                    this.connectResolve = resolve;
+                    this.connectReject = reject;
+                });
+            }
+
+
+            createPeer(initiator) {
+                this.peer = new SimplePeer({
+                    initiator,
+                    ...config
+                });
+
+                this.peer.on('signal', signal => {
+                    console.log('peer onsignal')
+                    this.ws.send(JSON.stringify({ type: 'signal', signal }))
+                })
+
+                this.peer.on('connect', () => {
+                    // wait for 'connect' event before using the data channel
+                    alert('connected');
+                    this.connectResolve();
+
+                    console.assert(this.peer._channel.ordered === false);
+                    console.assert(this.peer._channel.binaryType === 'arraybuffer');
+                    console.assert(this.peer._channel.maxRetransmits === 0);
+                })
+
+                this.peer.on('error', err => {
+                    console.log('peer onerror')
+
+                    if (this.connectReject) {
+                        this.connectReject(err);
+                    } else {
+                        throw err;
+                    }
+
+                });
+
+                this.peer.on('data', data => {
+                    if (this.receiveHandler) {
+                        this.receiveHandler(data);
+                    }
+                });
+            }
+
+            send(data) {
+                this.peer.send(data);
+            }
+
+            receive(handler) {
+                this.receiveHandler = handler;
+            }
+        }
+
+        const realtime = new RealtimeX();
+
+
+        realtime.connect();
+
+
+
+        const ta = document.getElementById('incoming');
+        const trip = document.getElementById('trip');
+        const tm = new Map();
+
+        realtime.receive(data => {
+            const t = data.toString('utf8');
+            // console.timeEnd(t);
+            // ta.value = t
+
+            if (t !== ta.value) {
+                realtime.send(t);
+            } else {
+                console.timeEnd(t);
+                trip.textContent = tm.get(t).getTime() - new Date().getTime();
+            }
+        });
+
+        ta.addEventListener('input', function (e) {
+            const t = e.target.value;
+            console.time(t);
+            tm.set(t, new Date())
+            realtime.send(e.target.value);
+        });
     </script>
 </body>
 

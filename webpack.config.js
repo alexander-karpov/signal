@@ -1,10 +1,10 @@
 const path = require('path');
 
 module.exports = {
-    entry: './src/index.ts',
+    entry: './src/server.ts',
     mode: 'production', //production development
     output: {
-        filename: 'index.js',
+        filename: 'signal.js',
         path: path.resolve(__dirname, 'dist'),
     },
     target: 'node',

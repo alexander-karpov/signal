@@ -1,7 +1,7 @@
 {
   "scripts": {
     "build": "webpack",
-    "deploy": "npm run build && scp /Users/kukuruku/Documents/samurai-server/dist/index.js games:/home/kukuruku/apps/samurai-server"
+    "deploy": "npm run build && scp dist/signal.js games:/home/kukuruku/apps/signal.js"
   },
   "devDependencies": {
     "@types/ws": "8.5.3",
