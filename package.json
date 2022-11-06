@@ -1,10 +1,16 @@
 {
   "scripts": {
     "build": "webpack",
-    "deploy": "npm run build && scp dist/signal.js games:/home/kukuruku/apps/signal.js"
+    "deploy": "npm run build && npm run copy-signal && npm run copy-realtime",
+    "copy-signal": "scp dist/signal.js games:/home/kukuruku/apps/signal.js",
+    "copy-realtime": "scp dist/realtime.js games:/home/kukuruku/apps/static/realtime.js",
+    "copy-example": "scp example/index.html games:/home/kukuruku/apps/static/index.html"
   },
   "devDependencies": {
+    "@types/simple-peer": "9.11.5",
     "@types/ws": "8.5.3",
+    "process": "0.11.10",
+    "simple-peer": "9.11.1",
     "ts-loader": "9.4.1",
     "typescript": "4.8.4",
     "webpack": "5.74.0",

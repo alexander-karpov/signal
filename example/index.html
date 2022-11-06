@@ -13,155 +13,31 @@
         <div id="trip"></div>
     </form>
     <pre id="outgoing"></pre>
-    <script src="simplepeer.min.js"></script>
+    <script src="https://yoide.su/realtime.js"></script>
     <script>
-        const config = {
-            channelConfig: { ordered: false, maxRetransmits: 0 },
-            config: {
-                iceServers: [
-                    {
-                        urls: "stun:openrelay.metered.ca:80",
-                    },
-                    {
-                        urls: "turn:openrelay.metered.ca:80",
-                        username: "openrelayproject",
-                        credential: "openrelayproject",
-                    },
-                    {
-                        urls: "turn:openrelay.metered.ca:443",
-                        username: "openrelayproject",
-                        credential: "openrelayproject",
-                    },
-                    {
-                        urls: "turn:openrelay.metered.ca:443?transport=tcp",
-                        username: "openrelayproject",
-                        credential: "openrelayproject",
-                    },
-                ]
-            },
-            trickle: false
-        };
-
-
-        class RealtimeX {
-            constructor() {
-                this.peer = null;
-                this.ws = null;
-                this.connectResolve = null;
-                this.connectReject = null;
-                this.receiveHandler = null;
-            }
-
-            connect() {
-                this.ws = new WebSocket('wss://yoide.su:3001');
-
-                this.ws.onmessage = (event) => {
-                    const action = JSON.parse(event.data.toString('utf8'));
-
-                    console.log('ws.onmessage:', action)
-
-                    switch (action.type) {
-                        case 'start':
-                            this.createPeer(true);
-                            break;
-                        case 'signal':
-                            if (!this.peer) {
-                                this.createPeer(false);
-                            }
-
-                            this.peer.signal(action.signal);
-                            break;
-                        default:
-                            this.connectReject(new Error(`Enexpected action type ${action.type}`));
-
-                    }
-                };
-
-                return new Promise((resolve, reject) => {
-                    this.connectResolve = resolve;
-                    this.connectReject = reject;
-                });
-            }
-
-
-            createPeer(initiator) {
-                this.peer = new SimplePeer({
-                    initiator,
-                    ...config
-                });
-
-                this.peer.on('signal', signal => {
-                    console.log('peer onsignal')
-                    this.ws.send(JSON.stringify({ type: 'signal', signal }))
-                })
-
-                this.peer.on('connect', () => {
-                    // wait for 'connect' event before using the data channel
-                    alert('connected');
-                    this.connectResolve();
-
-                    console.assert(this.peer._channel.ordered === false);
-                    console.assert(this.peer._channel.binaryType === 'arraybuffer');
-                    console.assert(this.peer._channel.maxRetransmits === 0);
-                })
-
-                this.peer.on('error', err => {
-                    console.log('peer onerror')
-
-                    if (this.connectReject) {
-                        this.connectReject(err);
-                    } else {
-                        throw err;
-                    }
-
-                });
-
-                this.peer.on('data', data => {
-                    if (this.receiveHandler) {
-                        this.receiveHandler(data);
-                    }
-                });
-            }
-
-            send(data) {
-                this.peer.send(data);
-            }
-
-            receive(handler) {
-                this.receiveHandler = handler;
-            }
-        }
-
-        const realtime = new RealtimeX();
-
-
+        const realtime = new window.Realtime();
         realtime.connect();
 
-
-
-        const ta = document.getElementById('incoming');
         const trip = document.getElementById('trip');
+        const ta = document.getElementById('incoming');
         const tm = new Map();
 
-        realtime.receive(data => {
-            const t = data.toString('utf8');
-            // console.timeEnd(t);
-            // ta.value = t
-
-            if (t !== ta.value) {
-                realtime.send(t);
-            } else {
-                console.timeEnd(t);
-                trip.textContent = tm.get(t).getTime() - new Date().getTime();
-            }
-        });
-
         ta.addEventListener('input', function (e) {
-            const t = e.target.value;
-            console.time(t);
-            tm.set(t, new Date())
-            realtime.send(e.target.value);
+            // const t = e.target.value;
+            // console.time(t);
+            // tm.set(t, new Date())
+            // realtime.send(e.target.value);
+
+
         });
+
+        let i = 0;
+
+        setInterval(() => {
+            realtime.send(i.toString());
+            i++;
+            trip.textContent = realtime.read();
+        }, 1000)
     </script>
 </body>
 

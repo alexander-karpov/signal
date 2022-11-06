@@ -1,13 +1,8 @@
 const path = require('path');
+const webpack = require('webpack');
 
-module.exports = {
-    entry: './src/server.ts',
+const commonConfig = {
     mode: 'production', //production development
-    output: {
-        filename: 'signal.js',
-        path: path.resolve(__dirname, 'dist'),
-    },
-    target: 'node',
     module: {
         rules: [
             {
@@ -21,3 +16,31 @@ module.exports = {
         extensions: ['.ts', '.js'],
     },
 };
+
+const serverConfig = {
+    ...commonConfig,
+    entry: './src/signal.ts',
+    target: 'node',
+    output: {
+        filename: 'signal.js',
+        path: path.resolve(__dirname, 'dist'),
+    },
+};
+
+const clientConfig = {
+    ...commonConfig,
+    entry: './src/realtime.ts',
+    target: 'web',
+    output: {
+        filename: 'realtime.js',
+        path: path.resolve(__dirname, 'dist'),
+    },
+    plugins: [
+        new webpack.ProvidePlugin({
+            process: 'process/browser',
+        }),
+    ],
+};
+
+
+module.exports = [serverConfig, clientConfig];

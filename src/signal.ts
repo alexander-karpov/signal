@@ -2,6 +2,7 @@ import { RawData, WebSocket, WebSocketServer } from 'ws';
 import * as assert from 'assert';
 
 const PORT = 3001;
+const CONNECT_TIMEOUT = 20_000;
 
 /**
  * Эти сокеты в процессе соединения по webrtc.
@@ -30,7 +31,7 @@ function establishWebRTCConnection(clients: Set<WebSocket>) {
 
         socketA.close();
         socketB.close();
-    }, 10_000);
+    }, CONNECT_TIMEOUT);
 
     socketA.on('message', onMessage);
     socketB.on('message', onMessage);
