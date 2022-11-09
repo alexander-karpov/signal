@@ -13,9 +13,13 @@
         <div id="trip"></div>
     </form>
     <pre id="outgoing"></pre>
-    <script src="https://yoide.su/realtime.js"></script>
+    <script src="../dist/realtime.js"></script>
     <script>
-        const realtime = new window.Realtime();
+        const realtime = new window.Realtime((data) => {
+            const r = new Float32Array(data.buffer)
+            trip.textContent = `${r[0]} ${r[1]} ${r[2]} ${r[3]}`
+        });
+
         realtime.connect();
 
         const trip = document.getElementById('trip');
@@ -31,12 +35,12 @@
 
         });
 
-        let i = 0;
+        let i = 5;
 
         setInterval(() => {
-            realtime.send(i.toString());
+            realtime.send(new Float32Array([i, i - 1, i - 2, i - 3]));
             i++;
-            trip.textContent = realtime.read();
+
         }, 1000)
     </script>
 </body>
