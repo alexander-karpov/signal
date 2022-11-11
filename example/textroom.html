@@ -1,0 +1,37 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Textroom demo</title>
+    <script src="../dist/textroom.js"></script>
+</head>
+
+<body>
+
+
+    <script>
+        (async function () {
+            const textroom = new window.Textroom();
+
+            await textroom.connect([
+                'ws://51.250.64.16:8188/',
+                'http://51.250.64.16:8088/janus'
+            ]);
+
+            console.log('Connected');
+
+            const rooms = await textroom.roomsList();
+
+            console.log('Rooms: ', rooms, 'Join to room: ', rooms[0].room);
+
+            const ok = await textroom.join(rooms[0].room);
+        })();
+
+
+    </script>
+</body>
+
+</html>

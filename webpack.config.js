@@ -1,5 +1,4 @@
 const path = require('path');
-const webpack = require('webpack');
 
 const commonConfig = {
     mode: 'production', //production development
@@ -17,30 +16,14 @@ const commonConfig = {
     },
 };
 
-const serverConfig = {
+const textroomConfig = {
     ...commonConfig,
-    entry: './src/signal.ts',
-    target: 'node',
-    output: {
-        filename: 'signal.js',
-        path: path.resolve(__dirname, 'dist'),
-    },
-};
-
-const clientConfig = {
-    ...commonConfig,
-    entry: './src/realtime.ts',
+    entry: './src/textroom.ts',
     target: 'web',
     output: {
-        filename: 'realtime.js',
+        filename: 'textroom.js',
         path: path.resolve(__dirname, 'dist'),
     },
-    plugins: [
-        new webpack.ProvidePlugin({
-            process: 'process/browser',
-        }),
-    ],
 };
 
-
-module.exports = [serverConfig, clientConfig];
+module.exports = [textroomConfig];

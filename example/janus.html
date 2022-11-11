@@ -1,0 +1,235 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Document</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/webrtc-adapter/8.1.1/adapter.min.js"></script>
+    <script src="https://janus.conf.meetecho.com/janus.js"></script>
+</head>
+
+<body>
+    <script>
+        Janus.init({
+            debug: true,
+            dependencies: Janus.useDefaultDependencies(), // or: Janus.useOldDependencies() to get the behaviour of previous Janus versions
+            callback: function () {
+                console.log('Janus init OK')
+            }
+        });
+
+        console.log('Connectiong…');
+        let textroom;
+        const myroom = 1234;
+        const transactions = {};
+        const participants = {};
+        var myid = null;
+        var username = null;
+
+        var janus = new Janus(
+            {
+                server: ['ws://51.250.64.16:8188/', 'http://51.250.64.16:8088/janus'],
+                success: function () {
+                    console.log('OK');
+
+                    janus.attach({
+                        plugin: "janus.plugin.textroom",
+                        success: function (pluginHandle) {
+                            textroom = pluginHandle;
+                            console.log('Plugin attached! \'pluginHandle\' is our handle')
+                            textroom.send({ message: { request: "setup" } });
+                        },
+                        error: function (cause) {
+                            console.error('Couldn\'t attach to the plugin')
+                        },
+                        onmessage: function (msg, jsep) {
+                            console.log('We got a message/event (msg) from the plugin')
+                            console.log(`If jsep is not null (${!!jsep}), this involves a WebRTC negotiation`)
+
+
+                            if (msg["error"]) {
+                                console.error(msg["error"]);
+                            }
+
+                            if (jsep) {
+                                // Answer
+                                textroom.createAnswer(
+                                    {
+                                        jsep: jsep,
+                                        // We only use datachannels
+                                        tracks: [{ type: 'data' }],
+                                        success: function (jsep) {
+                                            textroom.send({ message: { request: "ack" }, jsep });
+                                        },
+                                        error: function (error) {
+                                            console.error("WebRTC error:", error);
+                                        }
+                                    });
+                            }
+                        },
+                        ondataopen: function (data) {
+                            Janus.log("The DataChannel is available!");
+
+                        },
+                        oncleanup: function () {
+                            console.log('PeerConnection with the plugin closed, clean the UI')
+                            console.log('The plugin handle is still valid so we can create a new one')
+                        },
+                        detached: function () {
+                            console.log('Connection with the plugin closed, get rid of its features')
+                            console.log('The plugin handle is not valid anymore')
+                        },
+                        ondata: function (data) {
+                            Janus.debug("We got data from the DataChannel!", data);
+                            //~ $('#datarecv').val(data);
+                            var json = JSON.parse(data);
+                            var transaction = json["transaction"];
+
+                            console.log(`
+
+                            ondata data ${JSON.stringify(json, null, 2)}
+
+
+`);
+
+
+                            if (transactions[transaction]) {
+                                // Someone was waiting for this
+                                transactions[transaction](json);
+                                delete transactions[transaction];
+                                return;
+                            }
+                            var what = json["textroom"];
+                            if (what === "message") {
+                                // Incoming message: public or private?
+                                console.log('ondata message', json);
+                            } else if (what === "announcement") {
+                                // Room announcement
+                                var msg = escapeXmlTags(json["text"]);
+                                var dateString = getDateString(json["date"]);
+                                $('#chatroom').append('<p style="color: purple;">[' + dateString + '] <i>' + msg + '</i>');
+                                $('#chatroom').get(0).scrollTop = $('#chatroom').get(0).scrollHeight;
+                            } else if (what === "join") {
+                                // Somebody joined
+                                var username = json["username"];
+                                var display = json["display"];
+
+                                console.log(`Join ${username} ${display}`);
+
+                            } else if (what === "leave") {
+                                // Somebody left
+                                var username = json["username"];
+                                var when = new Date();
+                                $('#rp' + username).remove();
+                                $('#chatroom').append('<p style="color: green;">[' + getDateString() + '] <i>' + participants[username] + ' left</i></p>');
+                                $('#chatroom').get(0).scrollTop = $('#chatroom').get(0).scrollHeight;
+                                delete participants[username];
+                            } else if (what === "kicked") {
+                                // Somebody was kicked
+                                var username = json["username"];
+                                var when = new Date();
+                                $('#rp' + username).remove();
+                                $('#chatroom').append('<p style="color: green;">[' + getDateString() + '] <i>' + participants[username] + ' was kicked from the room</i></p>');
+                                $('#chatroom').get(0).scrollTop = $('#chatroom').get(0).scrollHeight;
+                                delete participants[username];
+                                if (username === myid) {
+                                    bootbox.alert("You have been kicked from the room", function () {
+                                        window.location.reload();
+                                    });
+                                }
+                            } else if (what === "destroyed") {
+                                if (json["room"] !== myroom)
+                                    return;
+                                // Room was destroyed, goodbye!
+                                Janus.warn("The room has been destroyed!");
+                                bootbox.alert("The room has been destroyed", function () {
+                                    window.location.reload();
+                                });
+                            }
+                        }
+                    });
+                },
+                error: function (cause) {
+                    console.log('FAIL', cause);
+                },
+                destroyed: function () {
+                    console.log('Janus session destroyed');
+                }
+            });
+
+        function sendData(text) {
+            var message = {
+                textroom: "message",
+                transaction: Janus.randomString(12),
+                room: myroom,
+                text: text,
+                ack: false
+            };
+            // Note: messages are always acknowledged by default. This means that you'll
+            // always receive a confirmation back that the message has been received by the
+            // server and forwarded to the recipients. If you do not want this to happen,
+            // just add an ack:false property to the message above, and server won't send
+            // you a response (meaning you just have to hope it succeeded).
+            textroom.data({
+                text: JSON.stringify(message),
+                error: function (reason) {
+                    console.error('send data error', reason);
+                },
+                success: function () { console.log('send data OK'); }
+            });
+        }
+
+
+        function registerUsername() {
+            {
+
+                username = 'Сашка Хулиган ' + Janus.randomString(4);
+
+                myid = Janus.randomString(12);
+                var transaction = Janus.randomString(12);
+                var register = {
+                    textroom: "join",
+                    transaction: transaction,
+                    room: myroom,
+                    username: myid,
+                    display: username
+                };
+
+                transactions[transaction] = function (response) {
+                    if (response["textroom"] === "error") {
+                        // Something went wrong
+                        if (response["error_code"] === 417) {
+                            // This is a "no such room" error: give a more meaningful description
+                            alert(
+                                "<p>Apparently room <code>" + myroom + "</code> (the one this demo uses as a test room) " +
+                                "does not exist...</p><p>Do you have an updated <code>janus.plugin.textroom.jcfg</code> " +
+                                "configuration file? If not, make sure you copy the details of room <code>" + myroom + "</code> " +
+                                "from that sample in your current configuration file, then restart Janus and try again."
+                            );
+                        } else {
+                            alert(response["error"]);
+                        }
+
+                        return;
+                    }
+
+                    // Any participants already in?
+                    console.log("Participants:", response.participants);
+                };
+
+                textroom.data({
+                    text: JSON.stringify(register),
+                    error: function (reason) {
+                        alert(reason);
+                    }
+                });
+            }
+        }
+
+
+    </script>
+</body>
+
+</html>

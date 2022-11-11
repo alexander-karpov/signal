@@ -7,14 +7,10 @@
     "copy-example": "scp example/index.html games:/home/kukuruku/apps/static/index.html"
   },
   "devDependencies": {
-    "@types/simple-peer": "9.11.5",
-    "@types/ws": "8.5.3",
-    "process": "0.11.10",
-    "simple-peer": "9.11.1",
     "ts-loader": "9.4.1",
     "typescript": "4.8.4",
     "webpack": "5.74.0",
     "webpack-cli": "4.10.0",
-    "ws": "8.10.0"
+    "webrtc-adapter": "8.2.0"
   }
 }
