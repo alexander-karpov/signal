@@ -7,12 +7,64 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Textroom demo</title>
     <script src="../dist/textroom.js"></script>
+
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+        }
+
+        .rooms {
+            display: flex;
+            flex-wrap: wrap;
+        }
+
+        .room {
+            width: 28vw;
+            height: 100px;
+            background-color: beige;
+            margin: 5px;
+            padding: 10px;
+        }
+
+        .users-count {
+            font-size: 24px;
+        }
+    </style>
 </head>
 
 <body>
+    <div id="rooms" class="rooms">
+    </div>
 
 
     <script>
+        function drawRoom(rooms) {
+            const container = document.getElementById('rooms');
+
+            rooms.sort((a, b) => a.room - b.room);
+            rooms.sort((a, b) => b.num_participants - a.num_participants);
+
+            container.innerHTML = "";
+
+            for (const room of rooms) {
+                const roomElem = document.createElement('div');
+                roomElem.classList.add('room');
+                roomElem.textContent = `# ${room.room}`;
+                roomElem.appendChild(createDiv('users-count', room.num_participants));
+
+                container.appendChild(roomElem);
+            }
+        }
+
+        function createDiv(className, text) {
+            const elem = document.createElement('div');
+            elem.classList.add(className);
+            elem.textContent = text;
+
+            return elem;
+        }
+
         (async function () {
             const textroom = new window.Textroom();
 
@@ -21,13 +73,19 @@
                 'http://51.250.64.16:8088/janus'
             ]);
 
-            console.log('Connected');
+            textroom.onJoin(async (user) => {
+                console.log('Joined ', user.username);
+                drawRoom(await textroom.roomsList());
+            })
 
-            const rooms = await textroom.roomsList();
+            textroom.onLeave(async (user) => {
+                console.log('Left ', user.username);
+                drawRoom(await textroom.roomsList());
+            })
 
-            console.log('Rooms: ', rooms, 'Join to room: ', rooms[0].room);
+            const ok = await textroom.join(1001);
 
-            const ok = await textroom.join(rooms[0].room);
+            drawRoom(await textroom.roomsList());
         })();
 
 

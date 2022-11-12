@@ -14,6 +14,7 @@ type Room = {
 
 type Participant = {
     "username": string,
+    "room": number
 }
 
 type RoomsListResponse = {
@@ -23,14 +24,16 @@ type RoomsListResponse = {
 
 type JoinResponse = {
     "textroom": "success",
-    "participants": Participant[]
+    "participants": { "username": string }[]
 }
 
-class Textroom { // EventTarget
+class Textroom {
     private textroom?: JanusJS.PluginHandle;
     private janus?: Janus;
     private transactions: Record<string, (data: any) => void> = {};
     private username: string = '';
+    private joinHandler?: (user: Participant) => void;
+    private leaveHandler?: (user: Participant) => void;
 
     async connect(server: string[]) {
         this.janus = await this.createJanus(server);
@@ -65,18 +68,31 @@ class Textroom { // EventTarget
             this.textroom?.data({
                 text: JSON.stringify({
                     "textroom": "join",
+                    transaction,
                     "room": roomId,
                     "username": this.username,
                     "history": false
                 }),
                 error: reject,
                 success: () => {
-                    this.transactions[transaction] = (data: JoinResponse) => resolve(data.participants);
+                    this.transactions[transaction] = (data: JoinResponse) => resolve(data.participants.map(p => {
+                        // @ts-expect-error
+                        const participant: Participant = p;
+                        participant.room = roomId;
+
+                        return participant
+                    }));
                 }
             });
         });
+    }
 
+    onJoin(handler: NonNullable<typeof this.joinHandler>) {
+        this.joinHandler = handler;
+    }
 
+    onLeave(handler: NonNullable<typeof this.leaveHandler>) {
+        this.leaveHandler = handler;
     }
 
     private createJanus(server: string[]): Promise<Janus> {
@@ -131,8 +147,6 @@ class Textroom { // EventTarget
         const transaction: string | undefined = json.transaction;
         const action: string = json.textroom;
 
-        console.log(`ondata data ${JSON.stringify(json, null, 2)}`);
-
         if (transaction) {
             this.transactions[transaction]?.(json);
             delete this.transactions[transaction];
@@ -140,20 +154,28 @@ class Textroom { // EventTarget
             return;
         }
 
+        console.log(`ondata data ${JSON.stringify(json, null, 2)}`);
+
         if (action === "message") {
             console.log('ondata message', json);
 
             return;
         }
 
-        if (action === "join") {
-            console.log(`Joined ${json.username} ${json.display}`);
+        if (action === "join" && json.username != this.username) {
+            this.joinHandler?.({
+                username: json.username,
+                room: json.room
+            });
 
             return;
         }
 
-        if (action === "leave") {
-            console.log(`Left ${json.username} ${json.display}`);
+        if (action === "leave" && json.username != this.username) {
+            this.leaveHandler?.({
+                username: json.username,
+                room: json.room
+            });
 
             return;
         }
