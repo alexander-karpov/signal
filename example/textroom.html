@@ -30,6 +30,10 @@
         .users-count {
             font-size: 24px;
         }
+
+        .message {
+            font-size: 10px;
+        }
     </style>
 </head>
 
@@ -50,11 +54,17 @@
             for (const room of rooms) {
                 const roomElem = document.createElement('div');
                 roomElem.classList.add('room');
+                roomElem.setAttribute("id", `room${room.room}`);
                 roomElem.textContent = `# ${room.room}`;
                 roomElem.appendChild(createDiv('users-count', room.num_participants));
 
                 container.appendChild(roomElem);
             }
+        }
+
+        function writeToRoom(room, text) {
+            const elem = document.getElementById(`room${room}`);
+            elem.appendChild(createDiv('message', text));
         }
 
         function createDiv(className, text) {
@@ -66,26 +76,37 @@
         }
 
         (async function () {
-            const textroom = new window.Textroom();
+            const textroom = new window.Textroom({
+                onJoin: async (user) => {
+                    console.log('Joined ', user.username);
+                    drawRoom(await textroom.roomsList());
+                },
+                onLeave: async (user) => {
+                    console.log('Left ', user.username);
+                    drawRoom(await textroom.roomsList());
+                },
+                onMessage: async (text, user) => {
+                    console.log(performance.now())
+
+                    writeToRoom(1001, `${user}: ${text}`);
+                }
+            });
 
             await textroom.connect([
                 'ws://51.250.64.16:8188/',
                 'http://51.250.64.16:8088/janus'
             ]);
 
-            textroom.onJoin(async (user) => {
-                console.log('Joined ', user.username);
-                drawRoom(await textroom.roomsList());
-            })
-
-            textroom.onLeave(async (user) => {
-                console.log('Left ', user.username);
-                drawRoom(await textroom.roomsList());
-            })
-
             const ok = await textroom.join(1001);
-
             drawRoom(await textroom.roomsList());
+
+            window.say = (text) => {
+                for (let i = 0; i < 300; i++) {
+                    console.log(performance.now())
+                    textroom.message(text + i);
+                }
+                writeToRoom(1001, `my: ${text}`);
+            }
         })();
 
 

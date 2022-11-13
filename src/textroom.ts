@@ -5,6 +5,10 @@
 import WebRTCAdapter from "webrtc-adapter";
 import Janus, { JanusJS } from "./janus";
 
+type Action0 = () => void;
+type Action<T> = (agr: T) => void;
+type Action2<T1, T2> = (agr1: T1, arg2: T2) => void;
+
 type Room = {
     "room": number,
     "description": string,
@@ -17,6 +21,12 @@ type Participant = {
     "room": number
 }
 
+type ErrorResponse = {
+    "textroom": "error",
+    "error": string,
+    "error_code": number
+};
+
 type RoomsListResponse = {
     "textroom": "success",
     "list": Room[]
@@ -27,13 +37,25 @@ type JoinResponse = {
     "participants": { "username": string }[]
 }
 
+type LeaveResponse = {
+    "textroom": "success"
+}
+
+type TextroomParams = {
+    onJoin?: Action<Participant>;
+    onLeave?: Action<Participant>;
+    onMessage: Action2<string, string>;
+    onClose?: Action0;
+}
+
 class Textroom {
     private textroom?: JanusJS.PluginHandle;
     private janus?: Janus;
     private transactions: Record<string, (data: any) => void> = {};
     private username: string = '';
-    private joinHandler?: (user: Participant) => void;
-    private leaveHandler?: (user: Participant) => void;
+    private currentRoom?: number;
+
+    constructor(private readonly params: TextroomParams) { }
 
     async connect(server: string[]) {
         this.janus = await this.createJanus(server);
@@ -54,7 +76,15 @@ class Textroom {
                 }),
                 error: reject,
                 success: () => {
-                    this.transactions[transaction] = (data: RoomsListResponse) => resolve(data.list);
+                    this.transactions[transaction] = (data: RoomsListResponse | ErrorResponse) => {
+                        if (data.textroom === 'error') {
+                            reject(data);
+
+                            return;
+                        };
+
+                        resolve(data.list)
+                    };
                 }
             });
         });
@@ -75,24 +105,58 @@ class Textroom {
                 }),
                 error: reject,
                 success: () => {
-                    this.transactions[transaction] = (data: JoinResponse) => resolve(data.participants.map(p => {
-                        // @ts-expect-error
-                        const participant: Participant = p;
-                        participant.room = roomId;
+                    this.transactions[transaction] = (data: JoinResponse | ErrorResponse) => {
+                        if (data.textroom === 'error') {
+                            reject(data);
 
-                        return participant
-                    }));
+                            return;
+                        }
+
+                        this.currentRoom = roomId;
+
+                        resolve(data.participants.map(p => {
+                            // @ts-expect-error
+                            const participant: Participant = p;
+                            participant.room = roomId;
+
+                            return participant
+                        }));
+                    };
                 }
             });
         });
     }
 
-    onJoin(handler: NonNullable<typeof this.joinHandler>) {
-        this.joinHandler = handler;
+    async leave() {
+        return new Promise<void>((resolve, reject) => {
+
+            const transaction = Janus.randomString(12);
+
+            this.textroom?.data({
+                text: JSON.stringify({
+                    "textroom": "leave",
+                    transaction,
+                }),
+                error: reject,
+                success: () => {
+                    this.transactions[transaction] = (data: LeaveResponse | ErrorResponse) => {
+                        if (data.textroom === 'error') {
+                            reject(data);
+                        }
+
+                        this.currentRoom = undefined;
+
+                        resolve();
+                    };
+                }
+            });
+        });
     }
 
-    onLeave(handler: NonNullable<typeof this.leaveHandler>) {
-        this.leaveHandler = handler;
+    message(text: number) {
+        this.textroom?.data({
+            text: `{"textroom":"message","transaction":"no ack","room":${this.currentRoom},"text":"${text}","ack":false}`,
+        });
     }
 
     private createJanus(server: string[]): Promise<Janus> {
@@ -101,7 +165,7 @@ class Textroom {
                 server,
                 success: () => resolve(janus),
                 error: reject,
-                destroyed: () => this.onJanusDestroyed()
+                destroyed: () => this.params.onClose?.()
             });
         });
     }
@@ -135,8 +199,8 @@ class Textroom {
                     }
                 },
                 ondataopen: () => resolve(textroom),
-                oncleanup: () => this.onClose(),
-                ondetached: () => this.onClose(),
+                oncleanup: () => this.params.onClose?.(),
+                ondetached: () => this.params.onClose?.(),
                 ondata: (data: any) => this.onData(data)
             });
         });
@@ -154,16 +218,8 @@ class Textroom {
             return;
         }
 
-        console.log(`ondata data ${JSON.stringify(json, null, 2)}`);
-
-        if (action === "message") {
-            console.log('ondata message', json);
-
-            return;
-        }
-
-        if (action === "join" && json.username != this.username) {
-            this.joinHandler?.({
+        if (action === "join" && json.username !== this.username) {
+            this.params.onJoin?.({
                 username: json.username,
                 room: json.room
             });
@@ -171,22 +227,20 @@ class Textroom {
             return;
         }
 
-        if (action === "leave" && json.username != this.username) {
-            this.leaveHandler?.({
+        if (action === "leave" && json.username !== this.username) {
+            this.params.onLeave?.({
                 username: json.username,
                 room: json.room
             });
 
             return;
         }
-    }
 
-    private onJanusDestroyed() {
-        console.log('Janus session destroyed');
-    }
+        if (action === "message" && json.from !== this.username) {
+            this.params.onMessage(json.text, json.from);
 
-    private onClose() {
-        console.log('WebRTC PeerConnection has been closed or plugin has been detached');
+            return;
+        }
     }
 }
 
