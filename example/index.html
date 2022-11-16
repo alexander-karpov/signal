@@ -88,7 +88,7 @@
                 onMessage: async (text, user) => {
                     console.log(performance.now())
 
-                    writeToRoom(1001, `${user}: ${text}`);
+                    writeToRoom(1000, `${user}: ${text}`);
                 }
             });
 
@@ -97,15 +97,12 @@
                 'http://51.250.64.16:8088/janus'
             ]);
 
-            const ok = await textroom.join(1001);
+            const ok = await textroom.join(1000);
             drawRoom(await textroom.roomsList());
 
             window.say = (text) => {
-                for (let i = 0; i < 300; i++) {
-                    console.log(performance.now())
-                    textroom.message(text + i);
-                }
-                writeToRoom(1001, `my: ${text}`);
+                textroom.message(text);
+                writeToRoom(1000, `my: ${text}`);
             }
         })();
 

@@ -136,6 +136,7 @@ class Textroom {
                 text: JSON.stringify({
                     "textroom": "leave",
                     transaction,
+                    room: this.currentRoom,
                 }),
                 error: reject,
                 success: () => {
